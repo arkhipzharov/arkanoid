@@ -1,0 +1,78 @@
+html {
+  height: 100%;
+}
+
+body {
+  height: 100%;
+  min-width: 320px;
+  color: #FFFFFF;
+  background-color: #00008B;
+}
+
+.container {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.game-area {
+  border-radius: 3px;
+  border: 2px solid black;
+  position: relative;
+  padding: 1px;
+}
+
+.game-area__inner {
+  width: 300px;
+  height: 300px;
+  position: relative;
+  padding: 3px;
+}
+
+.bricks-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(1, 30px);
+  grid-gap: 3px;
+}
+
+.bricks-grid__item {
+  border-radius: 3px;
+  height: 100%;
+  margin: 1px;
+}
+
+.bricks-grid__item[data-points="1"] {
+  background-color: #cb4154;
+}
+
+.bricks-grid__item[data-points="2"] {
+  background-color: #b87333;
+}
+
+.bricks-grid__item[data-points="3"] {
+  background-color: #c0c0c0;
+}
+
+.bricks-grid__item[data-points="4"] {
+  background-color: #FFD700;
+}
+
+.ball {
+  background-color: #ccff00;
+  width: 20px;
+  height: 20px;
+  position: absolute;
+  border-radius: 9999px;
+}
+
+.racket {
+  position: absolute;
+  background-color: #ffffff;
+  width: 80px;
+  height: 20px;
+  border-radius: 3px;
+  transition: left 0.15s;
+}
