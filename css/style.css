@@ -20,7 +20,6 @@ body {
 .game-area {
   border-radius: 3px;
   border: 2px solid black;
-  position: relative;
   padding: 1px;
 }
 
@@ -34,7 +33,7 @@ body {
 .bricks-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(1, 30px);
+  grid-auto-rows: 30px;
   grid-gap: 3px;
 }
 
@@ -63,12 +62,23 @@ body {
   background-color: #FFD700;
 }
 
+.bricks-grid__item.empty-space {
+  /* hide from elementFromPoint js function */
+  pointer-events: none;
+  /* remain space under brick after self removal */
+  visibility: hidden;
+}
+
 .ball {
   background-color: #ccff00;
   width: 20px;
   height: 20px;
   position: absolute;
   border-radius: 9999px;
+}
+
+.ball.moving-with-racket {
+  transition: left 0.15s;
 }
 
 .racket {

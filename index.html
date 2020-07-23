@@ -6,6 +6,7 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, shrink-to-fit=no"
   >
+  <title>Arkanoid</title>
   <link
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"
@@ -18,25 +19,30 @@
     rel="stylesheet"
     href="css/style.css"
   >
-  <title></title>
+  <link
+    rel="stylesheet"
+    href="css/style.css"
+  >
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.19/lodash.min.js"
+    defer
+  ></script>
+  <script
+    type="module"
+    src="js/index.js"
+    defer
+  ></script>
 </head>
 <body>
   <div class="container">
     <!-- wrapper border will be bareer -->
     <div class="game-area bareer">
       <div class="game-area__inner">
-        <div class="bricks-grid">
-          <div class="bricks-grid__item bareer" data-points="1">1</div>
-          <div class="bricks-grid__item bareer" data-points="2">2</div>
-          <div class="bricks-grid__item bareer" data-points="3">3</div>
-          <div class="bricks-grid__item bareer" data-points="4">4</div>
-        </div>
-        <div class="ball"></div>
+        <div class="bricks-grid"></div>
+        <div class="ball moving-with-racket"></div>
         <div class="racket bareer"></div>
       </div>
     </div>
   </div>
-  <script type="module" src="js/index.js">
-  </script>
 </body>
 </html>
