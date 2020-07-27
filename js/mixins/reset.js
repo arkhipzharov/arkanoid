@@ -1,105 +1,101 @@
-// you should integrate this mixin at the end of class constructor() {}, like this:
-// reset.init(classNotClassInstance, dataToReset, this);
+/*
+  you should call .register inside classe's constructor() {} like this:
+
+  reset.register(ClassItself, dataToResetFinal, this);
+
+  or like this if you want to reset only static class props:
+
+  reset.register(ClassItself, dataToResetFinal, this, true);
+
+  and use it like this:
+
+  ClassItself.reset(...)
+*/
 
 export default {
-  // pass array as 2nd param if you want to reset static props
-  init(classNotClassInstance, dataToResetMaybeKeys, classInstanceContext) {
-    let dataToReset;
-    let isStaticData;
-    if (Array.isArray(dataToResetMaybeKeys)) {
-      dataToReset = Object.fromEntries(
-        dataToResetMaybeKeys.map((key) => [key, classNotClassInstance[key]]),
+  registeredClasseAndStaticDatasToResetPairs: [],
+  register(
+    classItself,
+    dataToReset,
+    classInstanceContext,
+    isStaticClassProps,
+  ) {
+    let dataToResetFinal = dataToReset;
+    if (isStaticClassProps) {
+      const pair = this.registeredClasseAndStaticDatasToResetPairs.find(
+        (pair) => pair[0] === classItself,
       );
-      isStaticData = true;
+      if (pair) {
+        dataToResetFinal = pair[1];
+      } else {
+        Object.assign(classItself, dataToResetFinal);
+      }
     } else {
-      dataToReset = dataToResetMaybeKeys;
-      Object.assign(classInstanceContext, dataToReset);
+      Object.assign(classInstanceContext, dataToResetFinal);
     }
-    classNotClassInstance.reset = this.reset.bind(
-      classNotClassInstance,
-      // destroying references to nested object, if we dont do it they are will
-      // have irrelevant values
-      JSON.parse(JSON.stringify(dataToReset)),
-      classNotClassInstance,
+    const dataToResetFinalWithoutRefs = this.destroyRefsToNestedObjects(
+      dataToResetFinal,
+    );
+    classItself.reset = this.reset.bind(
+      classItself,
+      dataToResetFinalWithoutRefs,
+      classItself,
       classInstanceContext,
       this,
-      isStaticData
+      isStaticClassProps
     );
-    classNotClassInstance._resetValue = this._resetValue.bind(
-      classNotClassInstance,
-      JSON.parse(JSON.stringify(dataToReset)),
-      classNotClassInstance,
+    classItself._resetValue = this._resetValue.bind(
+      classItself,
+      dataToResetFinalWithoutRefs,
+      classItself,
       classInstanceContext,
       this,
-      isStaticData,
+      isStaticClassProps,
     );
-    this.classNotClassInstance = classNotClassInstance;
+    this.registeredClasseAndStaticDatasToResetPairs.push([
+      classItself,
+      dataToResetFinalWithoutRefs,
+    ]);
   },
   reset(
-    dataToReset,
-    classNotClassInstance,
+    dataToResetFinal,
+    classItself,
     classInstanceContext,
     mixinContext,
-    isStaticData,
+    isStaticClassProps,
     specificKeyOrKeys,
-    specificKeyOrKeysOfThatObjName,
-    isStaticDataAfterInitNotForIt,
   ) {
     if (Array.isArray(specificKeyOrKeys)) {
       specificKeyOrKeys.forEach((key) => {
-        classNotClassInstance._resetValue(
-          key,
-          specificKeyOrKeysOfThatObjName,
-          isStaticDataAfterInitNotForIt,
-        );
+        classItself._resetValue(key);
       });
     } else if (typeof specificKeyOrKeys === 'string') {
-      classNotClassInstance._resetValue(
-        specificKeyOrKeys,
-        specificKeyOrKeysOfThatObjName,
-        isStaticDataAfterInitNotForIt,
-      );
+      classItself._resetValue(specificKeyOrKeys);
     } else {
-      Object.keys(dataToReset).forEach((key) => {
-        classNotClassInstance._resetValue(
-          key,
-          specificKeyOrKeysOfThatObjName,
-          isStaticDataAfterInitNotForIt,
-        );
+      Object.keys(dataToResetFinal).forEach((key) => {
+        classItself._resetValue(key);
       });
     }
   },
   _resetValue(
-    dataToReset,
-    classNotClassInstance,
+    dataToResetFinal,
+    classItself,
     classInstanceContext,
     mixinContext,
-    isStaticData,
+    isStaticClassProps,
     key,
-    specificKeyOrKeysOfThatObjName,
-    isStaticDataAfterInitNotForIt,
   ) {
     const currDataContext =
-      isStaticDataAfterInitNotForIt || isStaticData
-        ? specificKeyOrKeysOfThatObjName
-          ? classNotClassInstance[specificKeyOrKeysOfThatObjName]
-          : classNotClassInstance
-        : specificKeyOrKeysOfThatObjName
-          ? classInstanceContext[specificKeyOrKeysOfThatObjName]
-          : classInstanceContext;
-    const value =
-      specificKeyOrKeysOfThatObjName
-        ? dataToReset[specificKeyOrKeysOfThatObjName][key]
-        : dataToReset[key];
+      isStaticClassProps ? classItself : classInstanceContext;
+    const value = dataToResetFinal[key];
     if (_.isObject(value)) {
-      // we need to destroy references to nested objects every time,
-      // or they are will be set after this[key] = dataToReset[key]
-      const objectPossiblyWithNestedObjectWithoutReferencesAfterParse =
-        JSON.parse(JSON.stringify(value));
-      currDataContext[key] =
-        objectPossiblyWithNestedObjectWithoutReferencesAfterParse;
+      currDataContext[key] =  mixinContext.destroyRefsToNestedObjects(value);
     } else {
       currDataContext[key] = value;
     }
+  },
+  destroyRefsToNestedObjects(obj) {
+    const wow = JSON.parse(JSON.stringify(obj));
+    return wow;
   },
 };
