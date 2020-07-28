@@ -9,11 +9,15 @@
 
   and use it like this:
 
-  ClassItself.reset(...)
+  ClassItself.reset()
+
+  mb like this also:
+
+  ClassItself.reset(specificKeyOrKeys)
 */
 
 export default {
-  registeredClasseAndStaticDatasToResetPairs: [],
+  registeredClassesAndStaticDatasToResetPairs: [],
   register(
     classItself,
     dataToReset,
@@ -22,7 +26,7 @@ export default {
   ) {
     let dataToResetFinal = dataToReset;
     if (isStaticClassProps) {
-      const pair = this.registeredClasseAndStaticDatasToResetPairs.find(
+      const pair = this.registeredClassesAndStaticDatasToResetPairs.find(
         (pair) => pair[0] === classItself,
       );
       if (pair) {
@@ -52,7 +56,7 @@ export default {
       this,
       isStaticClassProps,
     );
-    this.registeredClasseAndStaticDatasToResetPairs.push([
+    this.registeredClassesAndStaticDatasToResetPairs.push([
       classItself,
       dataToResetFinalWithoutRefs,
     ]);

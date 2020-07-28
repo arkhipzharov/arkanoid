@@ -1,7 +1,6 @@
-import numToPx from './helpers/num-to-px.js';
 import delay from './helpers/delay.js';
 import randomBetween from './helpers/random-between.js';
-import capitalizeFirstLetter from './helpers/capitalize-first-letter.js';
+import move from './mixins/move.js';
 import reset from './mixins/reset.js';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -9,21 +8,26 @@ document.addEventListener('DOMContentLoaded', () => {
   game.setupGame();
 });
 
-document.addEventListener('click', async () => {
+document.addEventListener('click', async (e) => {
   const game = new Game();
   await game.startGame();
 });
 
+document.querySelector('.settings-button').addEventListener('click', (e) => {
+  const game = new Game();
+  game.possiblySetNewCannonShotsLevelByUser(e);
+});
+
 class Game {
   static isPlaying = false;
+  static cannonShotsLevel = 2;
+  static finalLevel = null;
+  static BASE_LEVEL = 1;
   constructor() {
-    Game.racketTop
-      = document.querySelector('.game-area__inner').offsetHeight / 100 * 83;
     const staticDataToReset = {
       statsAndProgressData: {
         lives: 3,
-        level: 1,
-        finalLevel: 3,
+        level: Game.BASE_LEVEL,
         points: 0,
       },
       remainingBricksNum: null,
@@ -31,51 +35,76 @@ class Game {
       isOnFinalLevel: false,
     };
     reset.register(Game, staticDataToReset, this, true);
+    move(this);
   }
   setupGame() {
-    const racketTop = Game.racketTop;
-    const ballEl = document.querySelector('.ball');
-    this.setGameAreaChildBasePositions(
-      [
-        {
-          className: 'racket',
-          top: racketTop,
-        },
-        {
-          className: 'ball',
-          top: racketTop - ballEl.offsetHeight,
-        },
-      ],
-      true,
-    );
+    this.setOrGetCannonShotsLevelWithStorage();
+    this.setCurrBaseElCoordsData();
+    this.setGameAreaChildBasePositions(true);
     this.fillGameAreaWithBricks();
     this.refreshStatsAndProgressDOM();
     this.showHowToPlayInstructionOnce();
   }
-  async startGame() {
-    if (Game.isPlaying) return;
-    Game.isPlaying = true;
-    const ball = new BallMoving();
-    await ball.movePossiblyProcessGameRecursive();
+  setOrGetCannonShotsLevelWithStorage() {
+    let cannonShotsLevel = Game.cannonShotsLevel;
+    const cannonShotsLevelStorage = +(localStorage.cannonShotsLevel);
+    if (cannonShotsLevelStorage) {
+      cannonShotsLevel = cannonShotsLevelStorage;
+    } else {
+      localStorage.cannonShotsLevel = cannonShotsLevel;
+    }
+    Game.cannonShotsLevel = cannonShotsLevel;
   }
-  setGameAreaChildBasePositions(childClassesWithCoordsData, isCenter) {
-    childClassesWithCoordsData.forEach((data) => {
-      this.setCoordsGameAreaChild(data, isCenter);
+  setCurrBaseElCoordsData() {
+    const racketTop = document
+      .querySelector('.game-area__inner').offsetHeight / 100 * 83;
+    Game.currBaseElCoordsDataGroupedByClasses = {
+      'racket': {
+        isCenterOnSetup: true,
+        top: racketTop,
+      },
+      'ball': {
+        isCenterOnSetup: true,
+        top: racketTop - document.querySelector('.ball').offsetHeight,
+        left: null,
+      },
+      'cannon-shots': {
+        isCenterOnSetup: false,
+        top: -(100 + document.querySelector('.cannon-shots').offsetHeight),
+        left: 0,
+      },
+    };
+  }
+  setGameAreaChildBasePositions(isSetup) {
+    const data = Game.currBaseElCoordsDataGroupedByClasses;
+    Object.keys(data).forEach((className) => {
+      this.setCoordsGameAreaChild(className, data[className], isSetup);
     });
   }
-  setCoordsGameAreaChild({ className, top, left }, isCenter) {
+  setCoordsGameAreaChild(
+    className,
+    { top, left, isCenterOnSetup },
+    isSetup,
+  ) {
     const gameAreaRect = document
       .querySelector('.game-area__inner')
       .getBoundingClientRect();
     const child = document.querySelector(`.${className}`);
     const rect = child.getBoundingClientRect();
-    const style = child.style;
-    if (isCenter) {
-      style.left = numToPx((gameAreaRect.width - rect.width) / 2);
-    } else {
-      style.left = numToPx(left);
-    }
-    style.top = numToPx(top);
+    this.setElCoords(
+      child,
+      isCenterOnSetup && isSetup
+        ? (gameAreaRect.width - rect.width) / 2
+        : left,
+      top,
+    );
+  }
+  async startGame() {
+    if (Game.isPlaying) return;
+    Game.isPlaying = true;
+    const ballMove = new BallMove();
+    BallMove.isMoving = true;
+    await ballMove.movePossiblyProcessGameRecursive();
   }
   fillGameAreaWithBricks() {
     const BRICKS_GRID_POINTS_MATRIXES_GROUPED_BY_LEVELS = [
@@ -91,6 +120,7 @@ class Game {
         [3, 1, null, 1]
       ],
     ];
+    Game.finalLevel = BRICKS_GRID_POINTS_MATRIXES_GROUPED_BY_LEVELS.length;
     const bricksGrid = document.querySelector('.bricks-grid');
     if (bricksGrid.firstElementChild) {
       bricksGrid.innerHTML = '';
@@ -116,20 +146,22 @@ class Game {
       }
     }));
   }
-  processGameAfterClashToBareer(elementsData, edgeNextToBareer) {
+  async processGameAfterClashToBareer(elementsData, edgeNextToBareer) {
     const bareerEl = this.getBareerEl(elementsData, edgeNextToBareer);
-    this.reducePlayerLivesAfterBallMovingClashGameAreaBottom(
-      bareerEl,
-      edgeNextToBareer,
-    );
-    this.possiblyRemoveBrickGetPoints(bareerEl);
+    await Promise.all([
+      this.reducePlayerLivesAfterBallMovingClashGameAreaBottom(
+        bareerEl,
+        edgeNextToBareer,
+      ),
+      this.possiblyRemoveBrickGetPoints(bareerEl)
+    ]);
   }
   getBareerEl(elementsData, edgeNextToBareer) {
     return elementsData[edgeNextToBareer].find(
       (el) => el.classList.contains('bareer'),
     );
   }
-  possiblyRemoveBrickGetPoints(bareerEl) {
+  async possiblyRemoveBrickGetPoints(bareerEl) {
     const points = +(bareerEl.dataset && bareerEl.dataset.points);
     if (points) {
       bareerEl.classList.add('empty-space');
@@ -141,11 +173,11 @@ class Game {
         Game.remainingBricksNum--;
       } else {
         Game.reset('remainingBricksNum');
-        this.refreshGame();
+        await this.refreshGame();
       }
     }
   }
-  reducePlayerLivesAfterBallMovingClashGameAreaBottom(
+  async reducePlayerLivesAfterBallMovingClashGameAreaBottom(
     bareerEl,
     edgeNextToBareer,
   ) {
@@ -162,31 +194,34 @@ class Game {
       Game.statsAndProgressData.lives = lives;
     } else {
       Game.isLose = true;
-      this.refreshGame();
+      await this.refreshGame();
     }
   }
-  refreshGame() {
+  async refreshGame() {
+    BallMove.isMoving = false;
+    await this.possiblyStartCannonShots();
     Game.isPlaying = false;
-    const ballEl = document.querySelector(`.ball`);
-    const racket = document.querySelector(`.racket`);
-    this.setGameAreaChildBasePositions([
-      {
-        className: 'ball',
-        top: Game.racketTop - ballEl.offsetHeight,
-        left:
-          RacketMoving.currRacketLeftRelativeToGameArea
-          + ((racket.offsetWidth - ballEl.offsetWidth) / 2),
-      },
-    ]);
+    this.refreshRacketAndBallLeftData();
     this.possiblyChangeLevel();
     this.possiblyNotifyUserResetGameState();
+    this.possiblyMakeBallVisibleAgainAfterCannonShots();
+    this.setGameAreaChildBasePositions();
     this.fillGameAreaWithBricks();
-    BallMoving.reset();
+    BallMove.reset();
+  }
+  refreshRacketAndBallLeftData() {
+    const gameArea = document.querySelector(`.game-area`);
+    const ballEl = document.querySelector(`.ball`);
+    const racketEl = document.querySelector(`.racket`);
+    const racketLeftRelative = racketEl.offsetLeft;
+    const { racket: racketData, ball: ballData } =
+      Game.currBaseElCoordsDataGroupedByClasses;
+    ballData.left = racketLeftRelative + (racketEl.offsetWidth - ballEl.offsetWidth) / 2;
   }
   possiblyChangeLevel() {
     if (Game.isLose) return;
     let level = Game.statsAndProgressData.level;
-    if (level < Game.statsAndProgressData.finalLevel) {
+    if (level < Game.finalLevel) {
       level++;
       Game.statsAndProgressData.level = level;
       this.findStatsOrProgressDatasetElUpdateText('level', level);
@@ -203,6 +238,11 @@ class Game {
       alert('You are passed the whole game, play again if you want');
     }
     this.resetStateRefreshDOM();
+  }
+  possiblyMakeBallVisibleAgainAfterCannonShots() {
+    const ballElClassList = document.querySelector('.ball').classList;
+    if (!ballElClassList.contains('empty-space')) return;
+    ballElClassList.remove('empty-space');
   }
   resetStateRefreshDOM() {
     Game.reset();
@@ -224,6 +264,20 @@ class Game {
     );
     el.textContent = valueAndFutureText;
   }
+  async possiblyStartCannonShots() {
+    debugger;
+    if (
+      Game.remainingBricksNum === null
+      && Game.statsAndProgressData.level === Game.cannonShotsLevel
+    ) {
+      const cannonShotsMove = new CannonShotsMove();
+      const racketMove = new RacketMove();
+      await Promise.all([
+        cannonShotsMove.move(),
+        racketMove.watchCannonShotsForClashRecursive(),
+      ]);
+    }
+  }
   showHowToPlayInstructionOnce() {
     if (localStorage.isHowToPlayInstructionShown) return;
     alert(
@@ -231,9 +285,38 @@ class Game {
     );
     localStorage.isHowToPlayInstructionShown = true;
   }
+  possiblySetNewCannonShotsLevelByUser(e) {
+    e.stopPropagation();
+    const minLevel = Game.BASE_LEVEL;
+    const maxLevel = Game.finalLevel;
+    let isInputValidOrClosingPopup;
+    while (!isInputValidOrClosingPopup) {
+      const newLevel = prompt(
+        `
+          Choose on which level you will face cannon shots.
+          Min level - ${minLevel}, max level - ${maxLevel}
+        `,
+        Game.cannonShotsLevel,
+      );
+      const newLevelNum = +newLevel;
+      if (
+        newLevel !== null
+        && (!newLevelNum || newLevelNum < minLevel || newLevelNum > maxLevel)
+      ) {
+        alert('Level number is incorrect, try again');
+        continue;
+      }
+      if (newLevelNum) {
+        Game.cannonShotsLevel = newLevelNum;
+        localStorage.cannonShotsLevel = newLevelNum;
+      }
+      isInputValidOrClosingPopup = true;
+    }
+  }
 }
 
-class BallMoving extends Game {
+class BallMove extends Game {
+  static isMoving = true;
   constructor() {
     super();
     const baseJumpOffsetDirectionDeg = randomBetween(20, 60);
@@ -252,12 +335,12 @@ class BallMoving extends Game {
         oldLeft: null,
       },
       baseTop: null,
-      isMoving: false,
+      isMovingToNotStuckAtStart: false,
     };
-    reset.register(BallMoving, dataToReset, this);
+    reset.register(BallMove, dataToReset, this);
   }
   async movePossiblyProcessGameRecursive() {
-    if (!Game.isPlaying) return;
+    if (!BallMove.isMoving) return;
     const gameAreaRect = document
       .querySelector('.game-area__inner')
       .getBoundingClientRect();
@@ -266,26 +349,27 @@ class BallMoving extends Game {
     let left = rect.left - gameAreaRect.left;
     let top = rect.top - gameAreaRect.top;
     let baseTop = this.baseTop;
-    let isMoving = this.isMoving;
     let moveData = this.moveData;
+    let isMovingToNotStuckAtStart = this.isMovingToNotStuckAtStart;
     if (!baseTop) {
       baseTop = top;
       this.baseTop = baseTop;
-      isMoving = true;
-      this.isMoving = isMoving;
+      isMovingToNotStuckAtStart = true;
+      this.isMovingToNotStuckAtStart = isMovingToNotStuckAtStart;
       moveData.oldTop = top;
       moveData.oldLeft = left;
     }
     // incrementally move ball by >= 2px in Y coordinate after game start
-    // to not get stuck in racket first because it's bareer
-    if (top > baseTop - 2 && isMoving) {
-      this.move(moveData, left, top);
+    // to not get stuck in racket first because it's bareer, mb it's because
+    // of subpixel rendering, but cause not found
+    if (top > baseTop - 2 && isMovingToNotStuckAtStart) {
+      this.move(left, top);
       await delay(0);
       await this.movePossiblyProcessGameRecursive();
       return;
     }
-    this.isMoving = false;
-    const elementsData = this.getElementsDataFromPointsNextToAllEdges();
+    this.isMovingToNotStuckAtStart = false;
+    const elementsData = this.getElementsDataFromPointsNextToAllEdges('ball');
     const edgeNextToBareer = this.getMaxContactWithBareerPointsNumEdge(
       elementsData,
     );
@@ -364,89 +448,15 @@ class BallMoving extends Game {
       moveData.oldTop = top;
       moveData.oldLeft = left;
       this.moveData = moveData;
-      this.move(moveData, left, top);
-      super.processGameAfterClashToBareer(elementsData, edgeNextToBareer);
+      this.move(left, top);
+      await super.processGameAfterClashToBareer(elementsData, edgeNextToBareer);
       await delay(0);
       await this.movePossiblyProcessGameRecursive();
     } else {
-      this.move(moveData, left, top);
+      this.move(left, top);
       await delay(0);
       await this.movePossiblyProcessGameRecursive();
     }
-  }
-  getElementsDataFromPointsNextToAllEdges() {
-    const rect = document.querySelector('.ball').getBoundingClientRect();
-    const areasNextToEdgesToCheckBareerCoords = {
-      top: rect.top - 1,
-      right: rect.right + 1,
-      bottom: rect.bottom + 1,
-      left: rect.left - 1,
-    };
-    const elementsDataGroupedByEdges = {
-      top: [],
-      right: [],
-      bottom: [],
-      left: [],
-    }
-    let nextToEdgeAreaToCheckBareersLength;
-    nextToEdgeAreaToCheckBareersLength = rect.width + 2;
-    for (let i = 0; i < nextToEdgeAreaToCheckBareersLength; i++) {
-      // skipping most of area because only 2 edgepoints will always clash to
-      // bareer if it's near
-      if (i > 2 && i < nextToEdgeAreaToCheckBareersLength - 1) continue;
-      const pointX = areasNextToEdgesToCheckBareerCoords.left + i;
-      elementsDataGroupedByEdges
-        .top
-        .push(
-          document.elementFromPoint(
-            pointX,
-            areasNextToEdgesToCheckBareerCoords.top,
-          ),
-        );
-      elementsDataGroupedByEdges
-        .bottom
-        .push(
-          document.elementFromPoint(
-            pointX,
-            areasNextToEdgesToCheckBareerCoords.bottom,
-          ),
-        );
-    }
-    nextToEdgeAreaToCheckBareersLength = rect.height + 2;
-    for (let i = 0; i < nextToEdgeAreaToCheckBareersLength; i++) {
-      if (i > 1 && i < nextToEdgeAreaToCheckBareersLength - 1) continue;
-      const pointY = areasNextToEdgesToCheckBareerCoords.top + i;
-      elementsDataGroupedByEdges
-        .left
-        .push(
-          document.elementFromPoint(
-            areasNextToEdgesToCheckBareerCoords.left,
-            pointY,
-          ),
-        );
-      elementsDataGroupedByEdges
-        .right
-        .push(
-          document.elementFromPoint(
-            areasNextToEdgesToCheckBareerCoords.right,
-            pointY,
-          ),
-        );
-    }
-    return elementsDataGroupedByEdges;
-  }
-  getMaxContactWithBareerPointsNumEdge(elementsData) {
-    let maxContactWithBareerPointsNumEdge;
-    Object.keys(elementsData).reduce((maxContactWithBareerPointsNum, edge) => {
-      const maxContactWithBareerPointsNumNew = elementsData[edge]
-        .filter((el) => el.classList.contains('bareer')).length;
-      if (maxContactWithBareerPointsNumNew > maxContactWithBareerPointsNum) {
-        maxContactWithBareerPointsNumEdge = edge;
-        return maxContactWithBareerPointsNumNew;
-      }
-      return maxContactWithBareerPointsNum;
-    }, 0);
-    return maxContactWithBareerPointsNumEdge;
   }
   getNewAngle(
     xCoordDirectionDegAntiClockwise,
@@ -468,80 +478,135 @@ class BallMoving extends Game {
     }
     return angle;
   }
-  move(moveData, left, top) {
-    const style = document.querySelector('.ball').style;
-    const angleRadian = moveData.currAngle * Math.PI / 180;
-    // broser will update coords with this value as soon as he can, because we using
-    // setTimeout(fun, 0) promisification
+  move(left, top) {
+    const angleRadian = this.moveData.currAngle * Math.PI / 180;
     const SPEED_PX = 2;
-    style.left = numToPx(left + SPEED_PX * Math.cos(angleRadian));
-    style.top = numToPx(top + SPEED_PX * Math.sin(angleRadian));
+    this.setElCoords(
+      'ball',
+      left + SPEED_PX * Math.cos(angleRadian),
+      top + SPEED_PX * Math.sin(angleRadian),
+    );
   }
 }
 
 document.addEventListener(
   'mousemove',
   (e) => {
-    const racketMoving = new RacketMoving();
-    racketMoving.moveRacketWhenMouseOverGameArea(e);
+    const racketMove = new RacketMove();
+    racketMove.moveWhenMouseOverGameArea(e);
   },
   { passive: true }
 );
 
-class RacketMoving {
-  static currRacketLeftRelativeToGameArea = null;
-  moveRacketWhenMouseOverGameArea(e) {
+export default class RacketMove {
+  constructor() {
+    move(this);
+  }
+  moveWhenMouseOverGameArea(e) {
+    this.refreshRacketAndBallPositionBasedOnMouseMoveOverGameArea(e);
+  }
+  refreshRacketAndBallPositionBasedOnMouseMoveOverGameArea(e) {
     const gameAreaRect = document
       .querySelector('.game-area__inner')
       .getBoundingClientRect();
-    const racket = document.querySelector(`.racket`);
-    this.setElPositionBasedOnMouseMoveOverGameArea(gameAreaRect, e, racket);
-    if (Game.isPlaying) return;
+    const racketEl = document.querySelector(`.racket`);
     const ballEl = document.querySelector(`.ball`);
-    this.setElPositionBasedOnMouseMoveOverGameArea(gameAreaRect, e, ballEl, racket);
-  }
-  setElPositionBasedOnMouseMoveOverGameArea(
-    gameAreaRect,
-    mouseMoveEvent,
-    el,
-    elToCenterPrevElRelativeTo,
-  ) {
-    const elRect = el.getBoundingClientRect();
-    const elWidth = elRect.width;
-    const elWidthHalf = elWidth / 2;;
-    const elStyle = el.style;
+    const racketRect = racketEl.getBoundingClientRect();
+    const ballRect = ballEl.getBoundingClientRect();
+    const racketWidth = racketRect.width;
+    const racketWidthHalf = racketWidth / 2;
+    const ballWidth = ballRect.width;
     const { left: gameAreaLeft, width: gameAreaWidth } = gameAreaRect;
-    const clientX = mouseMoveEvent.clientX;
+    const clientX = e.clientX;
     const clientXRelativeToGameArea = clientX - gameAreaLeft;
     const gameAreaMiddleXCoord = gameAreaLeft + gameAreaWidth / 2;
-    let elToCenterPrevElRelativeToWidth;
-    let offsetToCenterElRelativeToOther = 0;
-    if (elToCenterPrevElRelativeTo) {
-      elToCenterPrevElRelativeToWidth = elToCenterPrevElRelativeTo.offsetWidth;
-      offsetToCenterElRelativeToOther =
-        (elToCenterPrevElRelativeToWidth - elWidth) / 2;
-    }
-    let newElLeftRelativeToGameArea;
+    const ballOffsetToCenterInRacket = (racketWidth - ballRect.width) / 2;
+    let newRacketLeftRelativeToGameArea;
     if (
-      clientX > gameAreaLeft + offsetToCenterElRelativeToOther + elWidthHalf
-      && clientX < gameAreaRect.right - elWidthHalf - offsetToCenterElRelativeToOther
+      clientX > gameAreaLeft + racketWidthHalf
+      && clientX < gameAreaRect.right - racketWidthHalf
     ) {
-      newElLeftRelativeToGameArea = clientX - gameAreaLeft - elWidthHalf;
-      elStyle.left = numToPx(newElLeftRelativeToGameArea);
+      newRacketLeftRelativeToGameArea = clientX - gameAreaLeft - racketWidthHalf;
+      this.setElCoords(racketEl, newRacketLeftRelativeToGameArea);
+      if (Game.isPlaying && !CannonShotsMove.isMoving) return;
+      this.setElCoords(
+        ballEl,
+        newRacketLeftRelativeToGameArea + ballOffsetToCenterInRacket,
+      );
     } else  {
       if (clientX < gameAreaMiddleXCoord) {
-        newElLeftRelativeToGameArea = offsetToCenterElRelativeToOther;
+        newRacketLeftRelativeToGameArea = 0;
       }
       if (clientX > gameAreaMiddleXCoord) {
-        newElLeftRelativeToGameArea =
-          gameAreaWidth
-          - elWidth
-          - offsetToCenterElRelativeToOther;
+        newRacketLeftRelativeToGameArea = gameAreaWidth - racketWidth;
       }
-      elStyle.left = numToPx(newElLeftRelativeToGameArea);
+      this.setElCoords(racketEl, newRacketLeftRelativeToGameArea);
+      if (Game.isPlaying && !CannonShotsMove.isMoving) return;
+      this.setElCoords(
+        ballEl,
+        newRacketLeftRelativeToGameArea + ballOffsetToCenterInRacket,
+      );
     }
-    if (el.classList.contains('racket')) {
-      RacketMoving.currRacketLeftRelativeToGameArea = newElLeftRelativeToGameArea;
+  }
+  async watchCannonShotsForClashRecursive() {
+    if (!CannonShotsMove.isMoving) return;
+    const elementsData = this.getElementsDataFromPointsNextToAllEdges('racket', true);
+    if (
+      Object.keys(elementsData).some((edge) => elementsData[edge].some((el) => {
+        const elClassList = el.classList;
+        return (
+          elClassList.contains('bareer')
+          && elClassList.contains('cannon-shots__item')
+        );
+      }))
+    ) {
+      const cannonShotsMove = new CannonShotsMove();
+      cannonShotsMove.startOrStop(false);
+      Game.isLose = true;
+      return;
     }
+    await delay(0);
+    await this.watchCannonShotsForClashRecursive();
+  }
+}
+
+class CannonShotsMove {
+  isCannonShotsMove = false;
+  constructor() {
+    move(this);
+  }
+  async move() {
+    this.startOrStop(true);
+    await Promise.all([
+      this.moveRecursive(),
+      this.watchCannonShotsMoveStopIfPlayerNotDead(),
+    ]);
+  }
+  // not moving with css transitions because document.elementFromPoint don't see it,
+  // cause not found
+  async moveRecursive() {
+    if (!CannonShotsMove.isMoving) return;
+    const cannonShots = document.querySelector('.cannon-shots');
+    const SPEED_PX = 1;
+    this.setElCoords(
+      cannonShots,
+      undefined,
+      cannonShots.offsetTop + SPEED_PX,
+    );
+    await delay(10);
+    await this.moveRecursive();
+  }
+  startOrStop(isStart) {
+    CannonShotsMove.isMoving = isStart;
+    document
+      .querySelector('.cannon-shots')
+      .classList[isStart ? 'add' : 'remove']('visible');
+    if (!isStart) return;
+    document.querySelector('.ball').classList.add('empty-space');
+  }
+  async watchCannonShotsMoveStopIfPlayerNotDead() {
+    await delay(7000);
+    if (!CannonShotsMove.isMoving) return;
+    this.startOrStop(false);
   }
 }

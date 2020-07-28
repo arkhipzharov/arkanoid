@@ -29,15 +29,22 @@
   ></script>
   <script
     type="module"
-    src="js/index.js"
+    src="js/startup.js"
     defer
   ></script>
 </head>
 <body>
+  <button class="settings-button">
+    <img
+      src="./assets/img/icons/settings.svg"
+      alt="Settings"
+      title="Settings"
+    >
+  </button>
   <div class="container">
     <!-- wrapper border will be bareer -->
     <div class="game-area bareer">
-      <div class="game-area__inner">
+      <div class="game-area__inner-wrap">
         <div class="stats">
           <ul class="stats__inner">
             <li class="stats__item">
@@ -54,9 +61,28 @@
             </li>
           </ul>
         </div>
-        <div class="bricks-grid"></div>
-        <div class="ball"></div>
-        <div class="racket bareer"></div>
+        <div class="game-area__inner">
+          <div class="cannon-shots">
+            <div class="cannon-shots__row">
+              <div class="cannon-shots__item bareer empty-space"></div>
+              <div class="cannon-shots__item bareer"></div>
+              <div class="cannon-shots__item bareer"></div>
+            </div>
+            <div class="cannon-shots__row">
+              <div class="cannon-shots__item bareer"></div>
+              <div class="cannon-shots__item bareer"></div>
+              <div class="cannon-shots__item bareer empty-space"></div>
+            </div>
+            <div class="cannon-shots__row">
+              <div class="cannon-shots__item bareer"></div>
+              <div class="cannon-shots__item bareer empty-space"></div>
+              <div class="cannon-shots__item bareer"></div>
+            </div>
+          </div>
+          <div class="bricks-grid"></div>
+          <div class="ball"></div>
+          <div class="racket bareer"></div>
+        </div>
       </div>
     </div>
   </div>
