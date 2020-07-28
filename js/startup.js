@@ -135,7 +135,10 @@ class Game {
             ${points === null ? 'empty-space' : ''}
             bareer
           "
-          data-points="${points}">${points}
+          data-points="${points}"
+          data-max-clashes="${randomBetween(1, 3)}"
+        >
+          ${points}
         </div>
       `);
       if (points) {
@@ -162,19 +165,25 @@ class Game {
     );
   }
   async possiblyRemoveBrickGetPoints(bareerEl) {
-    const points = +(bareerEl.dataset && bareerEl.dataset.points);
-    if (points) {
-      bareerEl.classList.add('empty-space');
-      let allPoints = Game.statsAndProgressData.points;
-      allPoints += points;
-      this.findStatsOrProgressDatasetElUpdateText('points', allPoints);
-      Game.statsAndProgressData.points = allPoints;
-      if (Game.remainingBricksNum > 1) {
-        Game.remainingBricksNum--;
-      } else {
-        Game.reset('remainingBricksNum');
-        await this.refreshGame();
-      }
+    const dataset = bareerEl.dataset;
+    let maxClashes = +(dataset && dataset.maxClashes);
+    if (!maxClashes) return;
+    if (maxClashes > 1) {
+      maxClashes--;
+      dataset.maxClashes = maxClashes;
+      return;
+    }
+    const points = +(dataset.points);
+    bareerEl.classList.add('empty-space');
+    let allPoints = Game.statsAndProgressData.points;
+    allPoints += points;
+    this.findStatsOrProgressDatasetElUpdateText('points', allPoints);
+    Game.statsAndProgressData.points = allPoints;
+    if (Game.remainingBricksNum > 1) {
+      Game.remainingBricksNum--;
+    } else {
+      Game.reset('remainingBricksNum');
+      await this.refreshGame();
     }
   }
   async reducePlayerLivesAfterBallMovingClashGameAreaBottom(
@@ -265,7 +274,6 @@ class Game {
     el.textContent = valueAndFutureText;
   }
   async possiblyStartCannonShots() {
-    debugger;
     if (
       Game.remainingBricksNum === null
       && Game.statsAndProgressData.level === Game.cannonShotsLevel
