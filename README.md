@@ -6,7 +6,7 @@ preview available [here](http://lime-test.h1n.ru/arkanoid)
 
 ## 📥 Setup
 
-1. `git clone https://github.com/shiftenko/arkanoid`
+1. `git clone https://github.com/arkhipzharov/arkanoid`
 
 ## 📝️ Edit
 
